@@ -1,30 +1,33 @@
-// Habit creation. The player picks stats and difficulty; the app suggests stats,
+// Habit creation and editing. The player picks stats and difficulty; the app suggests stats,
 // shows which classes use them, and previews the reward the rules engine will give.
 import { useState } from 'react';
 import { classesUsingStat } from '../../config/classes.ts';
 import { STATS, STAT_INFO, type StatId } from '../../config/stats.ts';
+import { VERSIONED_FIELDS } from '../../domain/habits/chain.ts';
 import { suggestStats } from '../../domain/habits/suggest.ts';
 import { previewHabitReward } from '../../domain/rules/rewards.ts';
 import type { Difficulty, Habit, HabitKind, Period } from '../../domain/types.ts';
 import { newId } from '../store.tsx';
 
 interface Props {
+  /** Editing an existing habit (the newest version of its chain). */
+  initial?: Habit;
   currentClassId?: string;
   now: Date;
   onSave: (h: Habit) => void;
   onCancel: () => void;
 }
 
-export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
-  const [name, setName] = useState('');
-  const [kind, setKind] = useState<HabitKind>('build');
-  const [target, setTarget] = useState(5);
-  const [unit, setUnit] = useState('hours');
-  const [period, setPeriod] = useState<Period>('weekly');
-  // Stats follow the suggestions until the player picks one themselves.
-  const [primaryOverride, setPrimary] = useState<StatId | undefined>();
-  const [secondaryOverride, setSecondary] = useState<StatId | undefined>();
-  const [difficulty, setDifficulty] = useState<Difficulty>(3);
+export function HabitForm({ initial, currentClassId, now, onSave, onCancel }: Props) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [kind, setKind] = useState<HabitKind>(initial?.kind ?? 'build');
+  const [target, setTarget] = useState(initial?.target ?? 5);
+  const [unit, setUnit] = useState(initial?.unit ?? 'hours');
+  const [period, setPeriod] = useState<Period>(initial?.period ?? 'weekly');
+  // Stats follow the suggestions until the player picks one themselves (an edit starts with its own picks).
+  const [primaryOverride, setPrimary] = useState<StatId | undefined>(initial?.primaryStat);
+  const [secondaryOverride, setSecondary] = useState<StatId | undefined>(initial?.secondaryStat);
+  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? 3);
 
   const suggestions = suggestStats(name, currentClassId);
   const suggestedPrimary = suggestions[0]?.stat ?? STATS[0];
@@ -35,6 +38,8 @@ export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
   const preview = previewHabitReward({ period, difficulty, primaryStat, secondaryStat });
   const sameStat = primaryStat === secondaryStat;
   const valid = name.trim() && target >= 0 && !sameStat;
+  const draft = { kind, target, unit, period, primaryStat, secondaryStat, difficulty };
+  const versioned = initial ? VERSIONED_FIELDS.some((f) => draft[f] !== initial[f]) : false;
 
   const useSuggestion = () => {
     setPrimary(undefined);
@@ -43,15 +48,16 @@ export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
 
   const save = () => {
     if (!valid) return;
-    onSave({
-      id: newId(), name: name.trim(), kind, target, unit, period,
-      primaryStat, secondaryStat, difficulty, createdAt: now.toISOString(),
-    });
+    onSave(
+      initial
+        ? { ...initial, ...draft, name: name.trim() }
+        : { id: newId(), name: name.trim(), ...draft, createdAt: now.toISOString() },
+    );
   };
 
   return (
     <div className="card form">
-      <h3>New habit</h3>
+      <h3>{initial ? 'Edit habit' : 'New habit'}</h3>
       <label>
         Name
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Study, Smoking, Gym" />
@@ -83,7 +89,7 @@ export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
         </label>
       </div>
 
-      {suggestions.length > 0 && overridden && (
+      {!initial && suggestions.length > 0 && overridden && (
         <div className="suggest">
           <span>
             Suggested for this habit: <strong>{suggestedPrimary} + {suggestedSecondary}</strong>
@@ -91,7 +97,7 @@ export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
           <button className="small" onClick={useSuggestion}>Use</button>
         </div>
       )}
-      {suggestions.length > 0 && !overridden && (
+      {!initial && suggestions.length > 0 && !overridden && (
         <p className="muted small">Stats suggested from the habit name. Change them if you like.</p>
       )}
 
@@ -115,9 +121,16 @@ export function HabitForm({ currentClassId, now, onSave, onCancel }: Props) {
         )}
       </p>
 
+      {versioned && (
+        <p className="note small">
+          ⓘ These changes apply from the current {period === 'daily' && initial?.period === 'daily' ? 'day' : 'period'} on. Periods that have
+          already closed keep the rewards they earned under the old settings.
+        </p>
+      )}
+
       <div className="row end">
         <button onClick={onCancel}>Cancel</button>
-        <button className="primary" disabled={!valid} onClick={save}>Create habit</button>
+        <button className="primary" disabled={!valid} onClick={save}>{initial ? 'Save changes' : 'Create habit'}</button>
       </div>
     </div>
   );
