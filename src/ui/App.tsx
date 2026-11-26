@@ -8,11 +8,13 @@ import { ArchiveScreen } from './screens/ArchiveScreen.tsx';
 import { CharacterScreen } from './screens/CharacterScreen.tsx';
 import { DevScreen } from './screens/DevScreen.tsx';
 import { HabitsScreen } from './screens/HabitsScreen.tsx';
+import { ProgressScreen } from './screens/ProgressScreen.tsx';
 import { RewardsScreen } from './screens/RewardsScreen.tsx';
 import { useStore } from './store.tsx';
 
 const TABS = {
   habits: { label: 'Habits', Screen: HabitsScreen },
+  progress: { label: 'Progress', Screen: ProgressScreen },
   character: { label: 'Character', Screen: CharacterScreen },
   adventure: { label: 'Adventure', Screen: AdventureScreen },
   rewards: { label: 'Rewards', Screen: RewardsScreen },

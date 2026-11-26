@@ -31,10 +31,12 @@ export function DevScreen() {
           <button className="primary" onClick={() => setOffset(0)}>Reset to real time</button>
         </div>
         <p className="muted small">
-          Logs you make while the clock is shifted are dated at the shifted time. Use a separate browser profile, or back up first, if you
-          don't want test data mixed in with your real habits.
+          Logs you make while the clock is shifted are dated at the shifted time and marked as <span className="badge test">test</span> logs,
+          so they can be kept out of your real rewards (below).
         </p>
       </div>
+
+      <TestLogsCard />
 
       <div className="card">
         <h3>Data</h3>
@@ -65,5 +67,37 @@ export function DevScreen() {
         </div>
       </div>
     </section>
+  );
+}
+
+function TestLogsCard() {
+  const { data, update } = useStore();
+  const count = data.logs.filter((l) => l.test).length;
+  return (
+    <div className="card">
+      <h3>Test logs</h3>
+      <p className="small">
+        {count === 0 ? 'No test logs.' : `${count} test log${count === 1 ? '' : 's'} saved.`}
+        {data.devOffsetDays !== 0 && ' The dev clock is shifted, so test logs are counted right now.'}
+      </p>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={data.settings.excludeTestLogs}
+          onChange={(e) => update((d) => ({ ...d, settings: { ...d.settings, excludeTestLogs: e.target.checked } }))}
+        />
+        Leave test logs out of rewards while the clock is real
+      </label>
+      <button
+        className="ghost"
+        disabled={count === 0}
+        onClick={() =>
+          confirm(`Delete ${count} test log${count === 1 ? '' : 's'}? Real logs are kept.`) &&
+          update((d) => ({ ...d, logs: d.logs.filter((l) => !l.test) }))
+        }
+      >
+        Delete all test logs
+      </button>
+    </div>
   );
 }

@@ -52,7 +52,7 @@ test('old saves migrate VIT to CON', async () => {
     characters: [{ id: 'c', snapshot: { stats: { STR: 5, VIT: 7 } } }],
   };
   const d = migrate(old);
-  assert.equal(d.schemaVersion, 2);
+  assert.equal(d.schemaVersion, 3);
   assert.equal(d.habits[0].primaryStat, 'CON');
   assert.deepEqual(d.characters[0].snapshot!.stats, { STR: 5, CON: 7 } as any);
 });

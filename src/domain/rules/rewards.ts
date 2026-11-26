@@ -57,13 +57,16 @@ export function periodCompletionBonusXp(habit: Pick<Habit, 'period' | 'difficult
 }
 
 /**
- * WEEKLY / MONTHLY habits pay out every day instead of only at period end:
- *  - each closed day earns its share of the period's base XP
- *    (build: that day's progress toward the target, up to scoreCap;
- *     limit: an equal share for each day you're still under the limit),
- *  - when the period closes with the target met, a large completion bonus lands,
- *    and the period's Tokens are granted then (Tokens still need the target met).
- * Days already earned are never taken back, even if the period is later missed.
+ * WEEKLY / MONTHLY habits.
+ *  BUILD habits pay out every day: each closed day earns its share of the period's
+ *    base XP (that day's progress toward the target, up to scoreCap). Days already
+ *    earned are never taken back, even if the period is later missed.
+ *  LIMIT habits pay when the period closes, and only if it closed at or under the
+ *    limit: an equal share of base XP for each "clean" day (nothing logged), plus
+ *    the headroom bonus. Days with something logged earn nothing, and a period that
+ *    went over the limit earns nothing at all — so nothing is paid and taken back.
+ *  Either way, when the period closes with the target met, a large completion bonus
+ *  lands, and the period's Tokens are granted then (Tokens still need the target met).
  */
 export function dripRewards(habit: Habit, logs: HabitLog[], now: Date): PeriodReward[] {
   if (habit.period === 'daily') return [];
@@ -72,22 +75,15 @@ export function dripRewards(habit: Habit, logs: HabitLog[], now: Date): PeriodRe
   const out: PeriodReward[] = [];
   const dripByPeriod = new Map<string, number>();
 
-  for (const day of closedPeriodStarts(new Date(habit.createdAt), until, 'daily')) {
+  for (const day of habit.kind === 'build' ? closedPeriodStarts(new Date(habit.createdAt), until, 'daily') : []) {
     const pStart = periodStart(day, habit.period);
-    const pEnd = periodEnd(pStart, habit.period);
     const dayEnd = periodEnd(day, 'daily');
     const before = totalInRange(logs, habit.id, pStart, day);
     const amount = totalInRange(logs, habit.id, day, dayEnd);
     const after = before + amount;
 
-    let share = 0;
-    if (habit.kind === 'build') {
-      const cap = habit.target * REWARDS.scoreCap;
-      share = habit.target > 0 ? Math.max(0, Math.min(after, cap) - Math.min(before, cap)) / habit.target : 0;
-    } else if (after <= habit.target) {
-      const daysInPeriod = Math.round((pEnd.getTime() - pStart.getTime()) / 86_400_000);
-      share = 1 / daysInPeriod;
-    }
+    const cap = habit.target * REWARDS.scoreCap;
+    const share = habit.target > 0 ? Math.max(0, Math.min(after, cap) - Math.min(before, cap)) / habit.target : 0;
     const xp = Math.round(base * share);
     if (xp <= 0) continue;
 
@@ -108,6 +104,16 @@ export function dripRewards(habit: Habit, logs: HabitLog[], now: Date): PeriodRe
 
   for (const result of closedResults(habit, logs, now)) {
     if (!result.achieved) continue;
+    if (habit.kind === 'limit') {
+      const clean = limitCleanDays(habit, logs, result);
+      const xp = Math.round(base * clean.share);
+      if (xp > 0) {
+        dripByPeriod.set(result.periodKey, xp);
+        out.push(splitReward(habit, {
+          ...result, periodKey: `${result.periodKey}-clean-days`, total: clean.days, score: clean.share, achieved: false,
+        }, xp));
+      }
+    }
     // limit habits: headroom under the limit is paid with the bonus
     const headroomXp = habit.kind === 'limit' ? Math.round(base * Math.max(0, result.score - 1)) : 0;
     const bonusXp = periodCompletionBonusXp(habit) + headroomXp;
@@ -115,6 +121,22 @@ export function dripRewards(habit: Habit, logs: HabitLog[], now: Date): PeriodRe
     out.push(splitReward(habit, { ...result, periodKey: `${result.periodKey}-complete` }, bonusXp, periodXp));
   }
   return out;
+}
+
+/**
+ * Clean days (nothing logged) of a closed limit-habit period, counted from the
+ * day the habit version was created. Each is worth 1/(days in the period).
+ */
+export function limitCleanDays(habit: Habit, logs: HabitLog[], result: PeriodResult): { days: number; share: number } {
+  const pStart = new Date(result.start);
+  const pEnd = new Date(result.end);
+  const daysInPeriod = Math.round((pEnd.getTime() - pStart.getTime()) / 86_400_000);
+  const from = periodStart(new Date(habit.createdAt), 'daily');
+  let days = 0;
+  for (let d = pStart < from ? from : pStart; d < pEnd; d = periodEnd(d, 'daily')) {
+    if (totalInRange(logs, habit.id, d, periodEnd(d, 'daily')) === 0) days++;
+  }
+  return { days, share: days / daysInPeriod };
 }
 
 function splitReward(habit: Habit, result: PeriodResult, totalXp: number, tokenXp = totalXp): PeriodReward {

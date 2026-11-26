@@ -164,10 +164,19 @@ test('weekly habits pay out daily as you progress, plus a big bonus when the wee
   assert.ok(balance(habitLedger([study], logs, new Date(2027, 0, 11)), 'tokens') > 0);
 });
 
-test('limit habits earn a share each day they stay under the limit', () => {
-  const now = new Date(2027, 0, 7); // Mon–Wed closed
-  const ok = balance(habitLedger([smoking], [], now), 'gold');
-  const blown = balance(habitLedger([smoking], [log('smoke', new Date(2027, 0, 5, 12), 5)], now), 'gold');
-  assert.ok(ok > 0);
-  assert.ok(blown > 0 && blown < ok); // Monday kept, nothing after going over
+test('limit habits pay at period end: a share per clean day, nothing if over the limit', () => {
+  const gold = (logs: HabitLog[], now: Date) => balance(habitLedger([smoking], logs, now), 'gold');
+  const tokens = (logs: HabitLog[], now: Date) => balance(habitLedger([smoking], logs, now), 'tokens');
+  const weekOver = new Date(2027, 0, 11); // week of Jan 4 has closed
+  // Nothing lands mid-week, even on clean days.
+  assert.equal(gold([], new Date(2027, 0, 7)), 0);
+  // A clean week pays; a week with two logged days (still under the limit) pays less.
+  const clean = gold([], weekOver);
+  const twoDays = gold([log('smoke', new Date(2027, 0, 5, 12), 1), log('smoke', new Date(2027, 0, 6, 12), 1)], weekOver);
+  assert.ok(clean > 0 && twoDays > 0 && twoDays < clean);
+  assert.ok(tokens([], weekOver) > 0);
+  // Going over the limit (3 > 2) forfeits the whole week, clean days included.
+  const blown = [log('smoke', new Date(2027, 0, 9, 12), 3)];
+  assert.equal(gold(blown, weekOver), 0);
+  assert.equal(tokens(blown, weekOver), 0);
 });
