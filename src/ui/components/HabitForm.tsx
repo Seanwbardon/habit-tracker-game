@@ -116,8 +116,11 @@ export function HabitForm({ initial, currentClassId, now, onSave, onCancel }: Pr
         Full {period === 'daily' ? 'day' : period === 'weekly' ? 'week' : 'month'}: +{preview.primaryXp} {primaryStat} XP,
         +{preview.secondaryXp} {secondaryStat} XP, 🪙 {preview.gold}, 🎟️ {preview.tokens}
         {preview.perfectWeekXp > 0 && <><br />Perfect week (all 7 days): +{preview.perfectWeekXp} bonus XP</>}
-        {preview.progressXp > 0 && (
+        {preview.progressXp > 0 && kind === 'build' && (
           <><br />Paid daily as you progress (up to {preview.progressXp} XP), plus +{preview.completionXp} bonus XP when the {period === 'weekly' ? 'week' : 'month'}'s target is met</>
+        )}
+        {preview.progressXp > 0 && kind === 'limit' && (
+          <><br />Paid when the {period === 'weekly' ? 'week' : 'month'} closes at or under the limit: up to {preview.progressXp} XP (a share for each day with nothing logged), plus +{preview.completionXp} bonus XP. Going over the limit earns nothing for that {period === 'weekly' ? 'week' : 'month'}.</>
         )}
       </p>
 

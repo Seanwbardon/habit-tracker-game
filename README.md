@@ -65,7 +65,8 @@ tests/           node:test suites
 ## Rules worth knowing
 
 - **Rewards land when a period closes** (end of day/week/month), not when you log. Progress shows live.
-- **Weekly/monthly habits pay out every day** as you progress (build: that day's share of the target; limit: a share for each day still under the limit), then a completion bonus (`periodCompletionBonus`) plus the period's Tokens when it closes with the target met.
+- **Weekly/monthly build habits pay out every day** as you progress (that day's share of the target), then a completion bonus (`periodCompletionBonus`) plus the period's Tokens when it closes with the target met.
+- **Weekly/monthly limit habits pay when the period closes**, and only if it closed at or under the limit: a share for each *clean* day (nothing logged), the headroom bonus, the completion bonus and the Tokens. Days with something logged earn nothing, and going over the limit earns nothing for that period. Nothing is paid mid-period, so nothing ever has to be taken back.
 - **Daily habits pay out every day, plus a perfect-week bonus** (`perfectWeekBonusXp`) when all 7 days of a Mon–Sun week hit the target.
 - **Missing a target never takes anything away.** You just don't earn that period.
 - **Tokens only come from habits.** Encounters can never fund real-life rewards.
