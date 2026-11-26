@@ -7,7 +7,7 @@ import {
   balanceHistory, habitStats, heatmap, periodHistory, seasonStatGrowth, streaks, weeklyCompletion,
 } from '../src/domain/habits/history.ts';
 import { allHabitRewards } from '../src/domain/rules/rewards.ts';
-import { countedLogs, diffRewardTotals, emptyData, habitRewardTotals, rewardLogs, wallet, type AppData } from '../src/domain/game.ts';
+import { countedLogs, diffRewardTotals, emptyData, habitRewardTotals, ledgerSourceTotals, rewardLogs, wallet, type AppData } from '../src/domain/game.ts';
 import { migrate } from '../src/data/storage.ts';
 import type { Habit, HabitLog, LedgerEntry } from '../src/domain/types.ts';
 
@@ -218,4 +218,14 @@ test('reward totals diff shows how much each reward went up', () => {
   assert.ok(d.xp.INT! > 0 && d.xp.WIS! > 0 && d.gold > 0 && d.tokens > 0);
   assert.equal(d.xp.STR, undefined); // unchanged stats are left out
   assert.deepEqual(diffRewardTotals(b.byHabit.get('Study')!, b.byHabit.get('Study')!), undefined);
+});
+
+test('ledger totals by source cover encounter and shop Gold', () => {
+  const e = (source: LedgerEntry['source'], currency: LedgerEntry['currency'], amount: number): LedgerEntry =>
+    ({ id: `${source}${amount}`, source, currency, amount, ref: '', at: D(1, 5).toISOString() });
+  const t = ledgerSourceTotals({ ledger: [e('encounter', 'gold', 12), e('encounter', 'gold', 3), e('shop', 'gold', -30), e('redeem', 'tokens', -50), e('boss', 'gold', 40)] });
+  assert.deepEqual(t.encounter, { gold: 15, tokens: 0 });
+  assert.deepEqual(t.shop, { gold: -30, tokens: 0 });
+  assert.deepEqual(t.redeem, { gold: 0, tokens: -50 });
+  assert.equal(t.boss.gold, 40);
 });

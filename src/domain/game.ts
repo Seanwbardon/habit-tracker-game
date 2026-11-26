@@ -9,7 +9,7 @@ import { allHabitRewards } from './rules/rewards.ts';
 import { closedResults } from './habits/evaluate.ts';
 import { seasonFor } from './seasons/calendar.ts';
 import { addDays } from './time.ts';
-import type { Character, CharacterSnapshot, Habit, HabitLog, LedgerEntry, RealReward, StatXp } from './types.ts';
+import type { Character, CharacterSnapshot, Habit, HabitLog, LedgerEntry, LedgerSource, RealReward, StatXp } from './types.ts';
 
 export interface SavedEncounter {
   id: string;
@@ -204,4 +204,18 @@ export function diffRewardTotals(before: RewardTotals, after: RewardTotals): Rew
   const gold = after.gold - before.gold;
   const tokens = after.tokens - before.tokens;
   return Object.keys(xp).length || gold || tokens ? { xp, gold, tokens } : undefined;
+}
+
+export type SourceTotals = Record<Exclude<LedgerSource, 'habit'>, { gold: number; tokens: number }>;
+
+/** Stored (non-habit) ledger totals by source: encounter and boss Gold, shop spending, redemptions. */
+export function ledgerSourceTotals(d: Pick<AppData, 'ledger'>): SourceTotals {
+  const out: SourceTotals = {
+    encounter: { gold: 0, tokens: 0 }, boss: { gold: 0, tokens: 0 }, shop: { gold: 0, tokens: 0 }, redeem: { gold: 0, tokens: 0 },
+  };
+  for (const e of d.ledger) {
+    if (e.source === 'habit') continue;
+    out[e.source][e.currency === 'gold' ? 'gold' : 'tokens'] += e.amount;
+  }
+  return out;
 }

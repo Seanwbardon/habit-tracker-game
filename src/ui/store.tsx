@@ -1,9 +1,9 @@
 // App-wide state: one AppData object, saved on every change.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { now as clockNow, setDevOffsetDays } from '../domain/clock.ts';
-import { archiveEndedSeasons, habitRewardTotals, type AppData } from '../domain/game.ts';
+import { archiveEndedSeasons, type AppData } from '../domain/game.ts';
 import { loadData, saveData } from '../data/storage.ts';
-import { logRewardChanges } from './rewardLog.ts';
+import { logRewardChanges, rewardSnapshot, type RewardSnapshot } from './rewardLog.ts';
 
 interface Store {
   data: AppData;
@@ -29,12 +29,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => saveData(data), [data]);
 
-  // Dev builds: log how habit rewards changed after every data or clock change.
-  const lastTotals = useRef<ReturnType<typeof habitRewardTotals>>(undefined);
+  // Dev builds: log how rewards and balances changed after every data or clock change.
+  const lastTotals = useRef<RewardSnapshot>(undefined);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const now = clockNow();
-    const totals = habitRewardTotals(data, now);
+    const totals = rewardSnapshot(data, now);
     if (lastTotals.current) logRewardChanges(lastTotals.current, totals, now);
     lastTotals.current = totals;
   }, [data, tick]);
