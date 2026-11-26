@@ -7,7 +7,7 @@ import {
   balanceHistory, habitStats, heatmap, periodHistory, seasonStatGrowth, streaks, weeklyCompletion,
 } from '../src/domain/habits/history.ts';
 import { allHabitRewards } from '../src/domain/rules/rewards.ts';
-import { countedLogs, emptyData, rewardLogs, wallet, type AppData } from '../src/domain/game.ts';
+import { countedLogs, diffRewardTotals, emptyData, habitRewardTotals, rewardLogs, wallet, type AppData } from '../src/domain/game.ts';
 import { migrate } from '../src/data/storage.ts';
 import type { Habit, HabitLog, LedgerEntry } from '../src/domain/types.ts';
 
@@ -206,4 +206,16 @@ test('balance history shows spending as drops', () => {
   const pts = balanceHistory([e(1, 10), e(3, 20), e(4, -15), e(4, 5)], 'gold', new Date(2027, 0, 2), new Date(2027, 0, 5));
   assert.deepEqual(pts.map((p) => p.balance), [10, 30, 20]);
   assert.deepEqual([pts[2].spent, pts[2].earned], [15, 5]);
+});
+
+test('reward totals diff shows how much each reward went up', () => {
+  const now = D(1, 20);
+  const before: AppData = { ...emptyData(), habits: [weekly], logs: [log('study', D(1, 5), 3)] };
+  const after: AppData = { ...before, logs: [...before.logs, log('study', D(1, 6), 2)] }; // backfill completes week 1
+  const a = habitRewardTotals(before, now);
+  const b = habitRewardTotals(after, now);
+  const d = diffRewardTotals(a.total, b.total)!;
+  assert.ok(d.xp.INT! > 0 && d.xp.WIS! > 0 && d.gold > 0 && d.tokens > 0);
+  assert.equal(d.xp.STR, undefined); // unchanged stats are left out
+  assert.deepEqual(diffRewardTotals(b.byHabit.get('Study')!, b.byHabit.get('Study')!), undefined);
 });

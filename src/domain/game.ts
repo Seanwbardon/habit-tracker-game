@@ -3,11 +3,13 @@
 import type { Encounter } from './encounters/generator.ts';
 import { freezeCharacter, viewCharacter, type CharacterView } from './character/stats.ts';
 import { balance, encounterGoldAllowance, habitLedger } from './economy/ledger.ts';
-import { attributeLogs } from './habits/chain.ts';
+import type { StatId } from '../config/stats.ts';
+import { attributeLogs, chainHeads, chainOf } from './habits/chain.ts';
+import { allHabitRewards } from './rules/rewards.ts';
 import { closedResults } from './habits/evaluate.ts';
 import { seasonFor } from './seasons/calendar.ts';
 import { addDays } from './time.ts';
-import type { Character, CharacterSnapshot, Habit, HabitLog, LedgerEntry, RealReward } from './types.ts';
+import type { Character, CharacterSnapshot, Habit, HabitLog, LedgerEntry, RealReward, StatXp } from './types.ts';
 
 export interface SavedEncounter {
   id: string;
@@ -166,4 +168,40 @@ export function archiveEndedSeasons(d: AppData, now: Date): AppData {
     return { ...c, snapshot: freezeCharacter(view, seasonEnd) };
   });
   return changed ? { ...d, characters } : d;
+}
+
+export interface RewardTotals {
+  xp: StatXp;
+  gold: number;
+  tokens: number;
+}
+
+/** Everything habits have earned so far, in total and per habit chain (keyed by the current name). */
+export function habitRewardTotals(d: AppData, now: Date): { total: RewardTotals; byHabit: Map<string, RewardTotals> } {
+  const heads = new Map(chainHeads(d.habits).flatMap((head) => chainOf(d.habits, head.id).map((v) => [v.id, head.name] as const)));
+  const total: RewardTotals = { xp: {}, gold: 0, tokens: 0 };
+  const byHabit = new Map<string, RewardTotals>();
+  for (const { habit, reward } of allHabitRewards(d.habits, rewardLogs(d), now)) {
+    const name = heads.get(habit.id) ?? habit.name;
+    const h = byHabit.get(name) ?? { xp: {}, gold: 0, tokens: 0 };
+    byHabit.set(name, h);
+    for (const t of [total, h]) {
+      t.gold += reward.gold;
+      t.tokens += reward.tokens;
+      for (const [stat, amount] of Object.entries(reward.xp) as [StatId, number][]) t.xp[stat] = (t.xp[stat] ?? 0) + amount;
+    }
+  }
+  return { total, byHabit };
+}
+
+/** after − before, keeping only the non-zero parts. Returns undefined if nothing changed. */
+export function diffRewardTotals(before: RewardTotals, after: RewardTotals): RewardTotals | undefined {
+  const xp: StatXp = {};
+  for (const s of new Set([...Object.keys(before.xp), ...Object.keys(after.xp)]) as Set<StatId>) {
+    const delta = (after.xp[s] ?? 0) - (before.xp[s] ?? 0);
+    if (delta) xp[s] = delta;
+  }
+  const gold = after.gold - before.gold;
+  const tokens = after.tokens - before.tokens;
+  return Object.keys(xp).length || gold || tokens ? { xp, gold, tokens } : undefined;
 }
