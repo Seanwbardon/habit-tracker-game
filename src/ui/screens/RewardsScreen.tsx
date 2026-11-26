@@ -38,11 +38,12 @@ export function RewardsScreen() {
         <div className="card">
           <h3>🎟️ Real-life rewards ({w.tokens} Tokens)</h3>
           <p className="muted small">Tokens only come from habits, never from encounters.</p>
+          {w.rawTokens < 0 && <Recovering amount={-w.rawTokens} what="Tokens" />}
           {data.realRewards.map((r) => (
             <div key={r.id} className="row between">
               <span>{r.name} · {r.cost}</span>
               <span className="row">
-                <button className="small primary" disabled={w.tokens < r.cost} onClick={() => redeem(r.id, r.cost)}>Redeem</button>
+                <button className="small primary" disabled={w.rawTokens < r.cost} onClick={() => redeem(r.id, r.cost)}>Redeem</button>
                 <button
                   className="small ghost"
                   onClick={() => update((d) => ({ ...d, realRewards: d.realRewards.filter((x) => x.id !== r.id) }))}
@@ -61,12 +62,13 @@ export function RewardsScreen() {
 
         <div className="card">
           <h3>🪙 Shop ({w.gold} Gold)</h3>
+          {w.rawGold < 0 && <Recovering amount={-w.rawGold} what="Gold" />}
           {LOOT.filter((i) => i.price).map((i) => (
             <div key={i.id} className="row between">
               <span>
                 {i.name} <span className="muted small">{Object.entries(i.bonus).map(([k, v]) => `+${v} ${k}`).join(' ')}</span>
               </span>
-              <button className="small" disabled={w.gold < i.price!} onClick={() => buy(i.id, i.price!)}>{i.price}</button>
+              <button className="small" disabled={w.rawGold < i.price!} onClick={() => buy(i.id, i.price!)}>{i.price}</button>
             </div>
           ))}
         </div>
@@ -85,5 +87,14 @@ export function RewardsScreen() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Shown when a rebalance pushed the real balance below zero (it's displayed as 0). */
+function Recovering({ amount, what }: { amount: number; what: string }) {
+  return (
+    <p className="note small">
+      ⓘ Reward values changed, so you've spent {amount} more {what} than your habits now earn. Purchases unlock once that's earned back.
+    </p>
   );
 }
