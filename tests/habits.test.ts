@@ -183,6 +183,11 @@ test('weekly completion rate across habits', () => {
   assert.equal(weeks.length, 2);
   assert.deepEqual([weeks[0].periods, weeks[0].achieved], [8, 3]); // 7 days + 1 week
   assert.equal(weeks[1].periods, 2); // Mon + Tue of week 2 closed so far
+
+  // A range starting mid-week clips the first week and ignores periods that closed before it.
+  const clipped = weeklyCompletion([daily], logs, D(1, 13), new Date(2027, 0, 7), D(1, 13));
+  assert.equal(clipped[0].start.getTime(), new Date(2027, 0, 7).getTime());
+  assert.equal(clipped[0].periods, 4); // Jan 7–10 (ending Jan 8–11)
 });
 
 test('season stat growth is cumulative by week', () => {

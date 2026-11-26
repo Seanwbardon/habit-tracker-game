@@ -204,12 +204,13 @@ export interface WeekCompletion {
   rate: number | null;
 }
 
-/** Share of habit periods met, by the week they closed in. */
+/** Share of habit periods met, by the week they closed in. Weeks are clipped to [from, until). */
 export function weeklyCompletion(habits: Habit[], logs: HabitLog[], now: Date, from: Date, until: Date): WeekCompletion[] {
   const results = habits.flatMap((h) => closedResults(h, logs, now));
-  return weekStarts(from, until).map((start) => {
+  return weekStarts(from, until).map((monday) => {
+    const start = monday < from ? from : monday;
     const s = start.getTime();
-    const e = addDays(start, 7).getTime();
+    const e = Math.min(addDays(monday, 7).getTime(), until.getTime());
     const inWeek = results.filter((r) => {
       const t = new Date(r.end).getTime();
       return t > s && t <= e;
