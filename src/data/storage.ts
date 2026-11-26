@@ -51,5 +51,11 @@ export function migrate(raw: any): AppData {
     d.savedEncounters = (d.savedEncounters ?? []).map((e: any) => ({ ...e, party: (e.party ?? []).map(fixSnap) }));
   }
 
-  return { ...emptyData(), ...d, schemaVersion: 2 } as AppData;
+  if (version < 3) {
+    // v3: habit edit chains (Habit.previousHabitId), test logs (HabitLog.test) and settings.
+    // Both new fields are optional, so only the settings need a default.
+    d.settings = { excludeTestLogs: true, ...(d.settings ?? {}) };
+  }
+
+  return { ...emptyData(), ...d, schemaVersion: 3 } as AppData;
 }

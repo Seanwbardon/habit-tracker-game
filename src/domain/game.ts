@@ -3,6 +3,7 @@
 import type { Encounter } from './encounters/generator.ts';
 import { freezeCharacter, viewCharacter, type CharacterView } from './character/stats.ts';
 import { balance, encounterGoldAllowance, habitLedger } from './economy/ledger.ts';
+import { attributeLogs } from './habits/chain.ts';
 import { closedResults } from './habits/evaluate.ts';
 import { seasonFor } from './seasons/calendar.ts';
 import { addDays } from './time.ts';
@@ -18,8 +19,13 @@ export interface SavedEncounter {
   party: CharacterSnapshot[];
 }
 
+export interface Settings {
+  /** Leave test logs (made while the dev clock was shifted) out of rewards while the clock is real. */
+  excludeTestLogs: boolean;
+}
+
 export interface AppData {
-  schemaVersion: 2;
+  schemaVersion: 3;
   userId: string;
   habits: Habit[];
   logs: HabitLog[];
@@ -32,11 +38,12 @@ export interface AppData {
   completedEncounters: string[];
   savedEncounters: SavedEncounter[];
   devOffsetDays: number;
+  settings: Settings;
 }
 
 export function emptyData(): AppData {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     userId: crypto.randomUUID(),
     habits: [],
     logs: [],
@@ -50,18 +57,50 @@ export function emptyData(): AppData {
     completedEncounters: [],
     savedEncounters: [],
     devOffsetDays: 0,
+    settings: { excludeTestLogs: true },
   };
 }
 
+/**
+ * Logs that count toward rewards. Test logs are left out while the clock is real
+ * (if the setting is on) and always counted while the dev clock is shifted, so
+ * boss and season testing still works.
+ */
+export function countedLogs(d: Pick<AppData, 'logs' | 'settings' | 'devOffsetDays'>): HabitLog[] {
+  const includeTest = !d.settings.excludeTestLogs || d.devOffsetDays !== 0;
+  return includeTest ? d.logs : d.logs.filter((l) => !l.test);
+}
+
+const attributed = new WeakMap<AppData, HabitLog[]>();
+
+/**
+ * The logs every rules-engine call should use: counted logs, attributed to habit
+ * versions (see habits/chain.ts). Cached per AppData object.
+ */
+export function rewardLogs(d: AppData): HabitLog[] {
+  let logs = attributed.get(d);
+  if (!logs) {
+    logs = attributeLogs(d.habits, countedLogs(d));
+    attributed.set(d, logs);
+  }
+  return logs;
+}
+
 export function fullLedger(d: AppData, now: Date): LedgerEntry[] {
-  return [...habitLedger(d.habits, d.logs, now), ...d.ledger];
+  return [...habitLedger(d.habits, rewardLogs(d), now), ...d.ledger];
 }
 
 export function wallet(d: AppData, now: Date) {
   const l = fullLedger(d, now);
+  const gold = balance(l, 'gold');
+  const tokens = balance(l, 'tokens');
   return {
-    gold: balance(l, 'gold'),
-    tokens: balance(l, 'tokens'),
+    /** Shown balances never go below 0 (a rebalance can push the real ledger negative). */
+    gold: Math.max(0, gold),
+    tokens: Math.max(0, tokens),
+    /** The real ledger balances; buying needs these to cover the cost. */
+    rawGold: gold,
+    rawTokens: tokens,
     encounterGoldLeft: encounterGoldAllowance(l, now),
   };
 }
@@ -73,14 +112,14 @@ export function currentCharacter(d: AppData, now: Date): Character | undefined {
 
 export function currentCharacterView(d: AppData, now: Date): CharacterView | undefined {
   const c = currentCharacter(d, now);
-  return c ? viewCharacter(c, d.habits, d.logs, now) : undefined;
+  return c ? viewCharacter(c, d.habits, rewardLogs(d), now) : undefined;
 }
 
 /** Average score of periods that closed in the last 7 days (0 if none). */
 export function recentScore(d: AppData, now: Date): number {
   const since = addDays(now, -7).getTime();
   const results = d.habits
-    .flatMap((h) => closedResults(h, d.logs, now))
+    .flatMap((h) => closedResults(h, rewardLogs(d), now))
     .filter((r) => new Date(r.end).getTime() >= since);
   if (!results.length) return 0;
   return results.reduce((s, r) => s + r.score, 0) / results.length;
@@ -122,7 +161,7 @@ export function archiveEndedSeasons(d: AppData, now: Date): AppData {
     }
     if (c.snapshot || !ended || c.seasonId === currentId) return c;
     // Freeze at the moment the season ended, so later logs don't count.
-    const view = viewCharacter(c, d.habits, d.logs, seasonEnd);
+    const view = viewCharacter(c, d.habits, rewardLogs(d), seasonEnd);
     changed = true;
     return { ...c, snapshot: freezeCharacter(view, seasonEnd) };
   });
