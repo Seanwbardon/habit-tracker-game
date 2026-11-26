@@ -19,6 +19,12 @@ export interface Habit {
   difficulty: Difficulty;
   createdAt: string; // ISO
   archivedAt?: string;
+  /**
+   * Set when this habit replaced an older version after a reward-affecting edit.
+   * The old version is archived at this one's createdAt, so closed periods keep
+   * the rules they were earned under. See domain/habits/chain.ts.
+   */
+  previousHabitId?: string;
 }
 
 export interface HabitLog {
@@ -27,6 +33,8 @@ export interface HabitLog {
   at: string; // ISO
   amount: number;
   note?: string;
+  /** Logged while the dev clock was shifted. See countedLogs() in game.ts. */
+  test?: true;
 }
 
 export interface PeriodResult {
